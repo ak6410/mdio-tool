@@ -77,17 +77,19 @@ static void mdio_write(int skfd, int location, int value)
 static void usage(char *prog)
 {
 	printf("Usage:\n"
-			"  %s r device register\n"
-			"  %s w device register value\n"
-			"     REGISTER and VALUE are hexadecimals\n",
+			"  %s r [page] device register\n"
+			"  %s w [page] device register value\n"
+			"     PAGE, REGISTER and VALUE are hexadecimals\n",
 			prog, prog) ;
 }
 
 int main(int argc, char **argv)
 {
-	int addr, dev, val;
+	int page, addr, dev, val, op, use_page;
 	struct mii_data *mii = (struct mii_data *)&ifr.ifr_data;
 
+	page = 0 ;
+	use_page = 0 ;
 	if(argc < 2 || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")  ) {
 		usage(argv[0]) ;
 		return 0;
@@ -99,8 +101,47 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	if (NULL == argv[1] || NULL == argv[2] || NULL == argv[3]) {
+		fprintf(stderr, "Error: missing argument(s)\n\n") ;
+		usage(argv[0]) ;
+		return 1 ;
+	}
+
+	op = argv[1][0] ;
+	switch(op) {
+		case 'R':
+		case 'r':
+			if (NULL == argv[4]) {
+				/* Page 0 */
+				page = 0 ;
+				addr = (int)strtol(argv[3], NULL, 16);
+			} else {
+				page = (int)strtol(argv[3], NULL, 16);
+				addr = (int)strtol(argv[4], NULL, 16);
+				use_page = 1 ;
+			}
+			break ;
+		case 'W':
+		case 'w':
+			if (NULL == argv[5]) {
+				/* Page 0 */
+				page = 0 ;
+				addr = (int)strtol(argv[3], NULL, 16);
+				val  = (int)strtol(argv[4], NULL, 16);
+			} else {
+				page = (int)strtol(argv[3], NULL, 16);
+				addr = (int)strtol(argv[4], NULL, 16);
+				val  = (int)strtol(argv[5], NULL, 16);
+				use_page = 1 ;
+			}
+			break ;
+		default:
+			fprintf(stderr, "Error: bad operation '%c'\n\n", op) ;
+			usage(argv[0]) ;
+			return 1 ;
+	}
+
 	/* Get the vitals from the interface. */
-	assert(argv[2] != NULL) ;
 	strncpy(ifr.ifr_name, argv[2], IFNAMSIZ);
 	if (ioctl(skfd, SIOCGMIIPHY, &ifr) < 0) {
 		if (errno != ENODEV)
@@ -108,21 +149,21 @@ int main(int argc, char **argv)
 			argv[2], strerror(errno));
 		return -1;
 	}
-
-	assert(argv[3] != NULL) ;
-	if(argv[1][0] == 'r') {
-		addr = (int)strtol(argv[3], NULL, 16);
-		printf("0x%.4x\n", mdio_read(skfd, addr));
+	if (use_page) {
+		mdio_write(skfd, 31, page);
 	}
-	else if(argv[1][0] == 'w') {
-		assert(argv[4] != NULL) ;
-		addr = (int)strtol(argv[3], NULL, 16);
-		val = (int)strtol(argv[4], NULL, 16);
-		mdio_write(skfd, addr, val);
+	switch(op) {
+		case 'R':
+		case 'r':
+			printf("0x%.4x\n", mdio_read(skfd, addr));
+			break ;
+		case 'W':
+		case 'w':
+			mdio_write(skfd, addr, val);
+			break ;
 	}
-	else {
-		usage(argv[0]) ;
+	if (use_page) {
+		mdio_write(skfd, 31, 0);
 	}
-
 	close(skfd);
 }
