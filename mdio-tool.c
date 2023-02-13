@@ -21,6 +21,8 @@ You should have received a copy of the GNU General Public License
 along with mdio-tool.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/* https://github.com/PieVo/mdio-tool */
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,6 +36,7 @@ along with mdio-tool.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <linux/sockios.h>
+#include <assert.h>
 
 #ifndef __GLIBC__
 #include <linux/if_arp.h>
@@ -71,14 +74,22 @@ static void mdio_write(int skfd, int location, int value)
     }
 }
 
+static void usage(char *prog)
+{
+	printf("Usage:\n"
+			"  %s r device register\n"
+			"  %s w device register value\n"
+			"     REGISTER and VALUE are hexadecimals\n",
+			prog, prog) ;
+}
 
 int main(int argc, char **argv)
 {
 	int addr, dev, val;
 	struct mii_data *mii = (struct mii_data *)&ifr.ifr_data;
 
-	if(argc < 2) {
-		printf("Usage mii [r/w] [dev] [reg] [val]\n");
+	if(argc < 2 || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")  ) {
+		usage(argv[0]) ;
 		return 0;
 	}
 
@@ -89,6 +100,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Get the vitals from the interface. */
+	assert(argv[2] != NULL) ;
 	strncpy(ifr.ifr_name, argv[2], IFNAMSIZ);
 	if (ioctl(skfd, SIOCGMIIPHY, &ifr) < 0) {
 		if (errno != ENODEV)
@@ -97,17 +109,19 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	assert(argv[3] != NULL) ;
 	if(argv[1][0] == 'r') {
-		addr = strtol(argv[3], NULL, 16);
+		addr = (int)strtol(argv[3], NULL, 16);
 		printf("0x%.4x\n", mdio_read(skfd, addr));
 	}
 	else if(argv[1][0] == 'w') {
-		addr = strtol(argv[3], NULL, 16);
-		val = strtol(argv[4], NULL, 16);
+		assert(argv[4] != NULL) ;
+		addr = (int)strtol(argv[3], NULL, 16);
+		val = (int)strtol(argv[4], NULL, 16);
 		mdio_write(skfd, addr, val);
 	}
 	else {
-		printf("Fout!\n");
+		usage(argv[0]) ;
 	}
 
 	close(skfd);
